@@ -1,0 +1,6 @@
+name = Exchange rate
+description = Exchange rate module
+core = 7.x
+dependencies[] = entity:entity
+
+files[] = exchange_rate_filters_handler_filter_cid_select.inc

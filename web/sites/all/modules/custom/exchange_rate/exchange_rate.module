@@ -1,0 +1,336 @@
+<?php
+/**
+ * `Exchange rate` module main file.
+ */
+
+const CURRENCY_LIST_URL = "http://www.cbr.ru/scripts/XML_valFull.asp";
+const CURRENCY_RATE_URL = "http://www.cbr.ru/scripts/XML_daily_eng.asp";
+const CURRENCY_RATE_DATE_PARAM = 'date_req';
+const CURRENCY_RATE_DATE_FORMAT = 'd/m/Y';
+const EXCHANGE_RATE_CURRENCY_ENTITY_TYPE = 'exchange_rate_currency';
+const EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE = 'exchange_rate_currency_rate';
+
+/**
+ * Implements hook_views_api().
+ */
+function exchange_rate_views_api() {
+  return array(
+    'api' => 3,
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function exchange_rate_menu() {
+
+  $items = array();
+
+  $items['admin/settings/exchange_rate_currency'] = array(
+    'title' => 'Exchange rate module settings',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('exchange_rate_admin'),
+    'access arguments' => array('administer exchange_rate_currency settings'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_entity_info().
+ */
+function exchange_rate_entity_info() {
+  return array(
+    EXCHANGE_RATE_CURRENCY_ENTITY_TYPE => array(
+      'label' => t('currency'),
+      'base table' => 'exchange_rate_currency',
+      'entity class' => 'Entity',
+      'controller class' => 'EntityAPIController',
+      'entity keys' => array(
+        'id' => 'cid',
+      ),
+      'bundles' => array(),
+      'views controller class' => 'EntityDefaultViewsController',
+    ),
+    EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE => array(
+      'label' => t('currency Rate'),
+      'base table' => 'exchange_rate_currency_rate',
+      'entity class' => 'Entity',
+      'controller class' => 'EntityAPIController',
+      'entity keys' => array(
+        'id' => 'crid',
+      ),
+      'bundles' => array(),
+      'views controller class' => 'EntityDefaultViewsController',
+    ),
+  );
+}
+
+/**
+ * Implements hook_entity_property_info().
+ */
+function exchange_rate_entity_entity_property_info() {
+  $info = array();
+
+  $properties_c = &$info[EXCHANGE_RATE_CURRENCY_ENTITY_TYPE]['properties'];
+
+  $properties_c['cid'] = array(
+    'label' => t("Currency ID"),
+    'type' => 'integer',
+  );
+
+  $properties_c['itemId'] = array(
+    'label' => t("External ID"),
+    'type' => 'string',
+  );
+
+  $properties_c['Name'] = array(
+    'label' => t("Russian name of currency"),
+    'type' => 'string',
+  );
+
+  $properties_c['EngName'] = array(
+    'label' => t("English name of currency"),
+    'type' => 'string',
+  );
+
+  $properties_c['ParentCode'] = array(
+    'label' => t("Code of currency parent"),
+    'type' => 'string',
+  );
+
+  $properties_cr = &$info[EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE]['properties'];
+
+  $properties_cr['crid'] = array(
+    'label' => t("Currency Rate ID"),
+    'type' => 'integer',
+  );
+
+  $properties_cr['cid'] = array(
+    'label' => t("Currency"),
+    'type' => EXCHANGE_RATE_CURRENCY_ENTITY_TYPE,
+  );
+
+  $properties_cr['Date'] = array(
+    'label' => t("Currency Rate Date"),
+    'type' => 'datetime',
+  );
+
+  $properties_cr['Value'] = array(
+    'label' => t("Currency Rate Value"),
+    'type' => 'float',
+  );
+
+  return $info;
+}
+
+/**
+ * Implements hook_views_data_alter().
+ */
+function exchange_rate_views_data_alter(&$data) {
+  $data[EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE]['cid']['title'] = t('Currency');
+  $data[EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE]['cid']['relationship'] = array(
+    'base' => EXCHANGE_RATE_CURRENCY_ENTITY_TYPE,
+    'base field' => 'cid',
+    'relationship field' => 'cid',
+    'handler' => 'views_handler_relationship',
+    'label' => t('Currency'),
+  );
+
+  $data[EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE]['cid']['filter'] = array('handler' => 'exchange_rate_filters_handler_filter_cid_select');
+
+  $data[EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE]['Date']['field']['handler'] = 'views_handler_field_date';
+  $data[EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE]['Date']['sort']['handler'] = 'views_handler_sort_date';
+  $data[EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE]['Date']['filter']['handler'] = 'views_handler_filter_date';
+  $data[EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE]['Date']['argument']['handler'] = 'views_handler_argument_date';
+}
+
+/**
+ * Implements hook_admin().
+ */
+function exchange_rate_admin() {
+  $form = array();
+
+  $form['update_curreny_list'] = array(
+    '#value' => t('Update currency list'),
+    '#type' => 'button',
+    '#suffix' => '<div id="currency-list-update-result"></div>',
+    '#ajax' => array(
+      'callback' => 'exchange_rate_currency_list_update_callback',
+      'wrapper' => 'currency-list-update-result',
+      'method' => 'replace',
+      'effect' => 'fade',
+    ),
+  );
+
+  $form['update_curreny_rate_form'] = array(
+    '#type' => 'fieldset',
+    'button' => array(
+      '#value' => t('Update currency rate'),
+      '#type' => 'button',
+      '#suffix' => '<div id="currency-rate-update-result"></div>',
+      '#ajax' => array(
+        'callback' => 'exchange_rate_currency_rate_update_callback',
+        'wrapper' => 'currency-rate-update-result',
+        'method' => 'replace',
+        'effect' => 'fade',
+      ),
+    ),
+    'date' => array(
+      '#type' => 'date',
+      '#title' => 'Date',
+    ),
+  );
+
+  return system_settings_form($form);
+}
+
+/**
+ * Implements hook_cron().
+ */
+function exchange_rate_cron() {
+  exchange_rate_currency_list_update();
+  exchange_rate_currency_rate_get(date(CURRENCY_RATE_DATE_FORMAT));
+}
+
+/**
+ * Currency list update AJAX callback.
+ *
+ * @param $form
+ * @param $form_state
+ */
+function exchange_rate_currency_list_update_callback($form, $form_state) {
+  exchange_rate_currency_list_update();
+}
+
+/**
+ * Currency rate update AJAX callback.
+ *
+ * @param $form
+ * @param $form_state
+ */
+function exchange_rate_currency_rate_update_callback($form, $form_state) {
+  $d = $form_state['values']['date'];
+  $date = $d['year'] .'-'. $d['month'] .'-'. $d['day'];
+  exchange_rate_currency_rate_get($date);
+}
+
+/**
+ * Get currency ID by External ID.
+ *
+ * @param string $item_id
+ *   External ID.
+ * @param bool $force
+ *   Update currency list if currency not found.
+ *
+ * @return \Entity|FALSE
+ */
+function exchange_rate_get_currency_id_by_external_id($item_id, $force = TRUE) {
+  if (empty($item_id)) {
+    return FALSE;
+  }
+
+  $efq = new EntityFieldQuery();
+  $efq->entityCondition('entity_type', EXCHANGE_RATE_CURRENCY_ENTITY_TYPE);
+  $efq->propertyCondition('itemId', $item_id);
+  $result = $efq->execute();
+
+  if (empty($result)) {
+    return FALSE;
+  }
+
+  $result = array_map(function ($item) {
+    return $item->cid;
+  }, $result[EXCHANGE_RATE_CURRENCY_ENTITY_TYPE]);
+
+  $currency = entity_load(EXCHANGE_RATE_CURRENCY_ENTITY_TYPE, $result);
+  $currency = reset($currency);
+
+  if ($force && !$currency) {
+    // Force update currency list.
+    exchange_rate_currency_list_update();
+    return exchange_rate_get_currency_id_by_external_id($item_id, FALSE);
+  }
+
+  return $currency ? $currency->cid : FALSE;
+}
+
+/**
+ * Currency list update function.
+ */
+function exchange_rate_currency_list_update() {
+  $xml = simplexml_load_file(CURRENCY_LIST_URL);
+
+  foreach ($xml as $item) {
+    $attributes = $item->attributes();
+    $item_id = (string) $attributes['ID'];
+    $found = exchange_rate_get_currency_id_by_external_id($item_id);
+
+    if (empty($item_id) || $found) {
+      continue;
+    }
+
+    $currency = array();
+    $currency['itemId'] = trim($item_id);
+
+    foreach ($item as $name => $value) {
+      $currency[$name] = trim((string) $value);
+    }
+
+    $entity = entity_create(EXCHANGE_RATE_CURRENCY_ENTITY_TYPE, $currency);
+    entity_save(EXCHANGE_RATE_CURRENCY_ENTITY_TYPE, $entity);
+  }
+}
+
+/**
+ * Currency list update function.
+ */
+function exchange_rate_currency_rate_get($date = NULL) {
+  if (!$date) {
+    $date = time();
+  }
+
+  $date = new DateTime(str_replace('/', '-', $date));
+
+  $url = url(CURRENCY_RATE_URL, array(
+    'query' => array(
+      CURRENCY_RATE_DATE_PARAM => $date->format(CURRENCY_RATE_DATE_FORMAT),
+    ),
+  ));
+
+  $xml = simplexml_load_file($url);
+
+  foreach ($xml as $item) {
+    $attributes = $item->attributes();
+    $item_id = (string) $attributes['ID'];
+
+    $cid = exchange_rate_get_currency_id_by_external_id($item_id);
+
+    if (!$cid) {
+      continue;
+    }
+
+    $currency_rate = array(
+      'cid' => $cid,
+      'Date' => $date->getTimestamp(),
+    );
+
+    foreach ($item as $name => $value) {
+      $currency_rate[$name] = trim((string) $value);
+    }
+
+    $currency_rate['Value'] = (float) str_replace(array('.', ','), array('', '.'), $currency_rate['Value']);
+
+    $efq = new EntityFieldQuery();
+    $efq->entityCondition('entity_type', EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE);
+    $efq->propertyCondition('cid', $cid);
+    $efq->propertyCondition('Date', $date->getTimestamp());
+    $found = $efq->execute();
+
+    if (!$found) {
+      $entity = entity_create(EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE, $currency_rate);
+      entity_save(EXCHANGE_RATE_CURRENCY_RATE_ENTITY_TYPE, $entity);
+    }
+  }
+}

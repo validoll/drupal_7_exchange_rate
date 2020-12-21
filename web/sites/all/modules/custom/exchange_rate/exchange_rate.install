@@ -1,0 +1,95 @@
+<?php
+/**
+ * `Exchange Rate` module install/uninstall functions.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function exchange_rate_schema() {
+  $schema['exchange_rate_currency'] = array(
+    'description' => 'Currency dictionary.',
+    'fields' => array(
+      'cid' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique ID.',
+      ),
+      'itemId' => array(
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => TRUE,
+        'default' => '',
+        'description' => 'External id.',
+      ),
+      'Name' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'description' => 'Russian name of currency.',
+      ),
+      'EngName' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'description' => 'English name of currency.',
+      ),
+      'Nominal' => array(
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => FALSE,
+        'default' => 1,
+        'description' => 'Nominal of currency.',
+      ),
+      'ParentCode' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'description' => 'Code of currency parent.',
+      ),
+      'ISO_Num_Code' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'description' => 'ISO num code of currency parent.',
+      ),
+      'ISO_Char_Code' => array(
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => FALSE,
+        'description' => 'ISO char code of currency.',
+      ),
+    ),
+    'primary key' => array('cid'),
+  );
+
+  $schema['exchange_rate_currency_rate'] = array(
+    'description' => 'Currency rate.',
+    'fields' => array(
+      'crid' => array(
+        'type' => 'serial',
+        'not null' => TRUE,
+        'description' => 'Primary Key: Unique ID.',
+      ),
+      'cid' => array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'description' => 'Currency ID.',
+      ),
+      'Date' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+        'description' => 'UNIX timestamp for when the Currency Rate was created.',
+      ),
+      'Value' => array(
+        'type' => 'float',
+        'not null' => FALSE,
+        'description' => 'Currency rate value.',
+      ),
+    ),
+    'primary key' => array('crid'),
+  );
+
+  return $schema;
+}
