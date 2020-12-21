@@ -55,7 +55,7 @@
    ```
 3. Запустите сборку проекта
    ```bash
-   make composer install
+   make composer install && make composer install
    ```
 4. После запуска всех контейнеров сервис будет доступен по адресу http://exchange.docker.localhost:8000/
 
